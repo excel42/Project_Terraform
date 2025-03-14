@@ -1,4 +1,3 @@
-
 # VPC 설정
 resource "aws_vpc" "main" {
   cidr_block           = "10.0.0.0/16"
@@ -33,24 +32,15 @@ resource "aws_subnet" "public_2" {
   }
 }
 
-# 프라이빗 서브넷 (WAS 서버용)
-resource "aws_subnet" "private_1" {
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = "10.0.3.0/24"
-  availability_zone = "ap-northeast-2a"
+# 추가된 퍼블릭 서브넷 3
+resource "aws_subnet" "public_3" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = "10.0.5.0/24"
+  availability_zone       = "ap-northeast-2a"
+  map_public_ip_on_launch = true
   
   tags = {
-    Name = "private-subnet-1"
-  }
-}
-
-resource "aws_subnet" "private_2" {
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = "10.0.4.0/24"
-  availability_zone = "ap-northeast-2c"
-  
-  tags = {
-    Name = "private-subnet-2"
+    Name = "public-subnet-3"
   }
 }
 
@@ -77,15 +67,6 @@ resource "aws_route_table" "public" {
   }
 }
 
-# 라우팅 테이블 - 프라이빗
-resource "aws_route_table" "private" {
-  vpc_id = aws_vpc.main.id
-  
-  tags = {
-    Name = "private-rt"
-  }
-}
-
 # 서브넷 연결 - 퍼블릭
 resource "aws_route_table_association" "public_1" {
   subnet_id      = aws_subnet.public_1.id
@@ -97,15 +78,9 @@ resource "aws_route_table_association" "public_2" {
   route_table_id = aws_route_table.public.id
 }
 
-# 서브넷 연결 - 프라이빗
-resource "aws_route_table_association" "private_1" {
-  subnet_id      = aws_subnet.private_1.id
-  route_table_id = aws_route_table.private.id
-}
-
-resource "aws_route_table_association" "private_2" {
-  subnet_id      = aws_subnet.private_2.id
-  route_table_id = aws_route_table.private.id
+resource "aws_route_table_association" "public_3" {
+  subnet_id      = aws_subnet.public_3.id
+  route_table_id = aws_route_table.public.id
 }
 
 # 보안 그룹 - ALB
@@ -197,6 +172,31 @@ resource "aws_security_group" "was_sg" {
   }
 }
 
+# 보안 그룹 - 추가 EC2 인스턴스
+resource "aws_security_group" "extra_sg" {
+  name        = "extra-sg"
+  description = "Security group for additional EC2 instance"
+  vpc_id      = aws_vpc.main.id
+  
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+  
+  tags = {
+    Name = "extra-sg"
+  }
+}
+
 # ALB 생성
 resource "aws_lb" "main" {
   name               = "main-alb"
@@ -255,18 +255,19 @@ resource "aws_lb_target_group_attachment" "web_2" {
 }
 
 # EC2 키 페어 (이미 생성된 키 페어 사용)
-# resource "aws_key_pair" "deployer" {
-#   key_name   = "deployer-key"
-#   public_key = "실제 퍼블릭 키 값을 입력하세요"
-# }
+resource "aws_key_pair" "project" {
+  key_name   = "project_key"
+  public_key = file("project_key.pub")
+}
 
-# EC2 인스턴스 - 웹 서버 1 (Nginx)
+
+# EC2 인스턴스 - 웹 서버 1 (Nginx) - 퍼블릭 서브넷 1에 위치
 resource "aws_instance" "web_1" {
-  ami                    = "ami-0f3a440bbcff3d043" # Amazon Linux 2023 (ap-northeast-2)
+  ami                    = "ami-062cddb9d94dcf95d" # Amazon Linux 2023 (ap-northeast-2)
   instance_type          = "t2.micro" # 가장 저렴한 인스턴스 타입
   subnet_id              = aws_subnet.public_1.id
   vpc_security_group_ids = [aws_security_group.web_sg.id]
-  # key_name               = aws_key_pair.deployer.key_name
+  key_name               = aws_key_pair.project.key_name
   
   user_data = <<-EOF
               #!/bin/bash
@@ -316,13 +317,13 @@ resource "aws_instance" "web_1" {
   }
 }
 
-# EC2 인스턴스 - 웹 서버 2 (Nginx)
+# EC2 인스턴스 - 웹 서버 2 (Nginx) - 퍼블릭 서브넷 2에 위치
 resource "aws_instance" "web_2" {
-  ami                    = "ami-0f3a440bbcff3d043" # Amazon Linux 2023 (ap-northeast-2)
+  ami                    = "ami-062cddb9d94dcf95d" # Amazon Linux 2023 (ap-northeast-2)
   instance_type          = "t2.micro" # 가장 저렴한 인스턴스 타입
   subnet_id              = aws_subnet.public_2.id
   vpc_security_group_ids = [aws_security_group.web_sg.id]
-  # key_name               = aws_key_pair.deployer.key_name
+  key_name               = aws_key_pair.project.key_name
   
   user_data = <<-EOF
               #!/bin/bash
@@ -372,13 +373,14 @@ resource "aws_instance" "web_2" {
   }
 }
 
+
 # EC2 인스턴스 - WAS 서버 1
 resource "aws_instance" "was_1" {
-  ami                    = "ami-0f3a440bbcff3d043" # Amazon Linux 2023 (ap-northeast-2)
+  ami                    = "ami-062cddb9d94dcf95d" # Amazon Linux 2023 (ap-northeast-2)
   instance_type          = "t2.micro" # 가장 저렴한 인스턴스 타입
-  subnet_id              = aws_subnet.private_1.id
+  subnet_id              = aws_subnet.public_1.id
   vpc_security_group_ids = [aws_security_group.was_sg.id]
-  # key_name               = aws_key_pair.deployer.key_name
+  key_name               = aws_key_pair.project.key_name
   
   user_data = <<-EOF
               #!/bin/bash
@@ -426,11 +428,11 @@ resource "aws_instance" "was_1" {
 
 # EC2 인스턴스 - WAS 서버 2
 resource "aws_instance" "was_2" {
-  ami                    = "ami-0f3a440bbcff3d043" # Amazon Linux 2023 (ap-northeast-2)
+  ami                    = "ami-062cddb9d94dcf95d" # Amazon Linux 2023 (ap-northeast-2)
   instance_type          = "t2.micro" # 가장 저렴한 인스턴스 타입
-  subnet_id              = aws_subnet.private_2.id
+  subnet_id              = aws_subnet.public_2.id
   vpc_security_group_ids = [aws_security_group.was_sg.id]
-  # key_name               = aws_key_pair.deployer.key_name
+  key_name               = aws_key_pair.project.key_name
   
   user_data = <<-EOF
               #!/bin/bash
@@ -473,6 +475,25 @@ resource "aws_instance" "was_2" {
   
   tags = {
     Name = "was-server-2"
+  }
+}
+
+# EC2 인스턴스 - Monitor (퍼블릭 서브넷 3에 위치)
+resource "aws_instance" "monitor" {
+  ami                    = "ami-062cddb9d94dcf95d"  # Amazon Linux 2023 (ap-northeast-2)
+  instance_type          = "t2.micro"
+  subnet_id              = aws_subnet.public_3.id
+  vpc_security_group_ids = [aws_security_group.extra_sg.id]
+  key_name               = aws_key_pair.project.key_name
+  
+  user_data = <<-EOF
+              #!/bin/bash
+              dnf update -y
+              # 추가적인 모니터링 설정 스크립트 작성 가능
+              EOF
+  
+  tags = {
+    Name = "monitor"
   }
 }
 
