@@ -5,6 +5,7 @@
 ## 1. 프로젝트 개요
 
 AWS 기반 Spring Boot 웹 애플리케이션 고가용성 아키텍처 구축 및 테스트를 위한 프로젝트 입니다.
+[상세 보고서 링크](https://docs.google.com/document/d/1RajNTJnpA9LcoR-MMFfGZ9oFRygLlJT4mZkqJXEcfYQ/edit?tab=t.0#heading=h.oeodsarxse19])
 
 ### 주요 목표
 - 웹 애플리케이션의 고가용성 및 확장성 검증
@@ -26,7 +27,6 @@ AWS 기반 Spring Boot 웹 애플리케이션 고가용성 아키텍처 구축 �
     - Web Server: Nginx로 구성, WAS Server 1,2 로 프록시
     - WAS Server: Tomcat + Spring Boot(WAR) 배포, 애플리케이션 로직 처리
     - Monitor: Scouter Collector를 통해 WAS의 CPU, TPS, xlog 등을 모니터링
-
 
 
 ## 3. 배포/실행 방법
